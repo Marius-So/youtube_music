@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "repl_nix_youtubemusic"
+version = "0.1.0"
+description = ""
+authors = ["Replit user <<>>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+alive-progress = "^3.0.1"
+bs4 = "^0.0.1"
+google-api-python-client = "^2.78.0"
+google-auth-oauthlib = "^1.0.0"
+pandas = "^1.5.3"
+requests = "^2.28.2"
+spotipy = "^2.22.1"
+xds-protos = "^0.0.11"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
