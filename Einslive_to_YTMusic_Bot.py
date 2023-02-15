@@ -2,6 +2,10 @@ from ytmusicapi import YTMusic
 from bs4 import BeautifulSoup
 import pandas as pd
 from alive_progress import alive_bar
+from YTmusic_handler import *
+from time import sleep
+
+from concurrent.futures import ThreadPoolExecutor
 
 import re
 import urllib
@@ -16,6 +20,19 @@ def scrape_einslive():
     play_list_links_filtered = [link for link in play_list_links if link.startswith('https://www1.wdr.de/radio/1live/musik')]
     return list(play_list_links_filtered)
 
+def parse_url(url):
+    try:
+        html = requests.get(url).content
+    except InvalidURL:
+        return []
+    bsObj = BeautifulSoup(html, 'lxml')
+    links = bsObj.findAll('a')
+
+    # if this gives a result then a playlist is present
+    playlist = bsObj.find("div", {"class": "box modTable"})
+
+    return links
+
 def get_einslive_links(url, base_page, depth=2):
     links_to_process = [(base_page + url, 0)]
     processed = set()
@@ -25,92 +42,125 @@ def get_einslive_links(url, base_page, depth=2):
         print(link, ' - ', level)
         processed.add(link)
 
-        try:
-            html = requests.get(link).content
-        except InvalidURL:
-            continue
-        bsObj = BeautifulSoup(html, 'lxml')
+        links = parse_url(link)
 
-        links = bsObj.findAll('a')
-        finalLinks = set()
         for link in links:
             if 'href' not in link.attrs.keys(): continue
             if link.attrs['href'].startswith('http'): continue
-
             if level + 1 < depth and base_page + link.attrs['href'] not in processed:
                 links_to_process.append((base_page + link.attrs['href'], level + 1))
-            elif level + 1 == depth and link not in processed:
+            elif level + 1 == depth and base_page + link.attrs['href'] not in processed:
                 processed.add(base_page + link.attrs['href'])
     return processed
 
-def process_playlist_link(yt, link, current_playlist_names):
-
+def process_playlist_link(link, current_playlist_names):
     data = urllib.request.urlopen(link).read()
     soup = BeautifulSoup(markup=data, features="lxml")
-    name = soup.find('span', attrs={'class': "mediaSerial"}).text
-    date = soup.find('span', attrs={'class': "mediaDate"}).text
-
-    header = soup.find('h1', attrs={'class': "articleHeader headline small"}).text
+    try:
+        name = soup.find('span', attrs={'class': "mediaSerial"}).text
+        date = soup.find('span', attrs={'class': "mediaDate"}).text
+    except AttributeError:
+        return
+    try:
+        header = soup.find('h1', attrs={'class': "articleHeader headline small"}).text
+    except AttributeError:
+        header = ''
 
     playlist_name = name + ' - ' + date
+
     # read playlist from html
     if playlist_name not in current_playlist_names:
         playlist_table = soup.find("div", {"class": "box modTable"})
         if playlist_table:
             playlist = pd.read_html(str(playlist_table.contents[1]))[0]
             playlist.dropna(inplace=True)
-            playlistId = yt.create_playlist(playlist_name, header + '\n' + 'THIS is an automatically generated Playlist. GENERATED based on: \n' + link, 'PUBLIC',)
+
+            service = create_service()
+            playlistId = create_playlist(service, playlist_name, header + '\n' + 'THIS is an automatically generated Playlist. GENERATED based on: \n' + link)
+            print('Sucessfully Created Playlist: ', playlist_name)
 
             for idx in range(playlist.shape[0]):
                 print(idx, ' of ', playlist.shape[0])
-                songname = playlist.iloc[idx][0] + ' ' +  playlist.iloc[idx][1]
-                search_results = yt.search(songname)
-            # get videoId
-                vidID = None
-                for result in search_results:
-                    if 'videoId' in result:
-                        vidID = result['videoId']
-                        break
-                if vidID:
-                    yt.add_playlist_items(playlistId, [vidID])
-            print('Sucessfully Created Playlist: ', playlist_name)
-            print('Playlist link: ', 'https://music.youtube.com/playlist?list=' + playlistId)
-            return ('https://music.youtube.com/playlist?list=' + playlistId, playlist_name)
-        else:
-            return (False, False)
+                song_name = playlist.iloc[idx][0] + ' ' +  playlist.iloc[idx][1]
+                response = get_song_id(service, song_name, use_free=True)
 
+                try:
+                    if response:
+                        sleep(3)
+                        add_song_to_playlist(service, playlistId, response[0])
+
+                except HttpError as e:
+                    print(e)
+                    with open('playlist_to_delete.txt', 'a') as f:
+                        f.write(playlistId +  '\n')
+                    return
+
+            return ('https://music.youtube.com/playlist?list=' + playlistId, playlist_name)
+    else:
+        return
 
 if __name__ == "__main__":
-    # the user is set via x-authuser....
-
-    # Should automate the receiving of the cookie credentials on new login...
-
     # scrape 1Live
-    playlist_links = scrape_einslive()
+    # need to upate / improve the scraper
+    write = False
+    if write:
+        playlist_links = scrape_einslive()
+        with open('playlist_links.txt', 'w') as f:
+            for e in playlist_links:
+                f.write(e + '\n')
+    else:
+        playlist_links = []
+        with open('playlist_links.txt', 'r') as f:
+            for line in f:
+                playlist_links.append(line[:-1])
+
 
     # connect to YT Music and get current playlists
-    yt = YTMusic('headers_auth.json')
-    # need to find out for whihc account the auth is...
-    current_playlists = yt.get_library_playlists(None)
-    current_playlist_names = [playlist['title'] for playlist in current_playlists]
+    service = create_service()
+    current_playlist_names = retrieve_playlists_names(service, channel_id = 'UC3zfYmvoC45lsNz01Ow_nrA')
 
+    # remove playlists that threw an error in creation:
+    with open ('playlist_to_delete.txt', 'r') as f:
+        playlist_ids = [e[:-1] for e  in f.readlines()]
+
+        for playlist_id in playlist_ids:
+            response = remove_playlist(service, playlist_id)
+
+        # clear the ids
+        open('playlist_to_delete.txt', 'w')
+
+
+    # filter for live playlists
     if 'https://www1.wdr.de/radio/1live-diggi/onair/1live-diggi-playlist/index.html' in current_playlist_names:
         current_playlist_names.remove('https://www1.wdr.de/radio/1live-diggi/onair/1live-diggi-playlist/index.html')
     if 'https://www1.wdr.de/radio/1live/musik/playlist/index.html' in current_playlist_names:
         current_playlist_names.remove('https://www1.wdr.de/radio/1live/musik/playlist/index.html')
 
+    # playlists already processed
+    link_match = pd.read_csv('1Live_link_match.csv')
+    links_processed = link_match['1live_link'].to_list()
+
     with alive_bar(len(playlist_links)) as bar:
         for idx, link in enumerate(playlist_links):
             bar()
+            if idx < 200:
+                continue
 
-            playlist_link, playlist_name = process_playlist_link(yt, link, current_playlist_names)
-            if playlist_link:
+            if link in links_processed: continue
+
+            playlist_info = process_playlist_link(link, current_playlist_names)
+
+            if playlist_info:
+                playlist_link, playlist_name = playlist_info
                 link_match = pd.read_csv('1Live_link_match.csv')
                 add_row = {'1live_link':link,
                  'playlist_name': playlist_name,
                  'yt_music_link': playlist_link}
                 link_match = link_match.append(add_row, ignore_index=True)
                 link_match.to_csv('1Live_link_match.csv', index=False)
+
+            else:
+                pass
 
 # email: 1.live.playlist.bot@gmail.com
 # pw -> same as marius96meyer
