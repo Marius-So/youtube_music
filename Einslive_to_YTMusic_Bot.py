@@ -115,10 +115,10 @@ def process_playlist_link(link, current_playlist_names):
     return
 
 
-if __name__ == "__main__":
+def do_daily_bot_update():
   # scrape 1Live
   # need to upate / improve the scraper
-  write = False
+  write = True
   if write:
     playlist_links = scrape_einslive()
     with open('playlist_links.txt', 'w') as f:
@@ -161,9 +161,7 @@ if __name__ == "__main__":
   with alive_bar(len(playlist_links)) as bar:
     for idx, link in enumerate(playlist_links):
       bar()
-      if idx < 200:
-        continue
-
+      
       if link in links_processed: continue
 
       playlist_info = process_playlist_link(link, current_playlist_names)
