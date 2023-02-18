@@ -68,6 +68,7 @@ def process_playlist_link(link, current_playlist_names):
   try:
     name = soup.find('span', attrs={'class': "mediaSerial"}).text
     date = soup.find('span', attrs={'class': "mediaDate"}).text
+    #playlist_name = soup.find('span', attrs={'class': "mediaDate"}).text
   except AttributeError:
     return
   try:
