@@ -61,14 +61,13 @@ def get_einslive_links(url, base_page, depth=2):
         processed.add(base_page + link.attrs['href'])
   return processed
 
-
 def process_playlist_link(link, current_playlist_names):
   data = urllib.request.urlopen(link).read()
   soup = BeautifulSoup(markup=data, features="lxml")
   try:
     name = soup.find('span', attrs={'class': "mediaSerial"}).text
     date = soup.find('span', attrs={'class': "mediaDate"}).text
-    #playlist_name = soup.find('span', attrs={'class': "mediaDate"}).text
+    # okay this only exists if there is a table...
   except AttributeError:
     return
   try:
@@ -81,9 +80,16 @@ def process_playlist_link(link, current_playlist_names):
   playlist_name = name + ' - ' + date
 
   # read playlist from html
-  if playlist_name not in current_playlist_names:
-    playlist_table = soup.find("div", {"class": "box modTable"})
-    if playlist_table:
+  playlist_table = soup.find("div", {"class": "box modTable"})
+  if playlist_table:
+      # here we check again for the name...
+      if date != soup.find("caption").text[-10:]:
+        # only here i know that there is this caption...
+        date = soup.find("caption").text[-10:]
+        playlist_name = name + ' - ' + date
+
+      if playlist_name in current_playlist_names: return
+
       playlist = pd.read_html(str(playlist_table.contents[1]))[0]
       playlist.dropna(inplace=True)
 
@@ -101,10 +107,11 @@ def process_playlist_link(link, current_playlist_names):
 
         try:
           if response:
-            sleep(3)
+            sleep(5)
             add_song_to_playlist(service, playlistId, response[0])
 
         except HttpError as e:
+          print(service, playlistId, response[0])
           print(e)
           with open('playlist_to_delete.txt', 'a') as f:
             f.write(playlistId + '\n')
@@ -119,7 +126,7 @@ def process_playlist_link(link, current_playlist_names):
 def do_daily_bot_update():
   # scrape 1Live
   # need to upate / improve the scraper
-  write = True
+  write = False
   if write:
     playlist_links = scrape_einslive()
     with open('playlist_links.txt', 'w') as f:
@@ -162,7 +169,7 @@ def do_daily_bot_update():
   with alive_bar(len(playlist_links)) as bar:
     for idx, link in enumerate(playlist_links):
       bar()
-      
+
       if link in links_processed: continue
 
       playlist_info = process_playlist_link(link, current_playlist_names)
@@ -180,3 +187,7 @@ def do_daily_bot_update():
 
       else:
         pass
+
+
+if __name__=='__main__':
+  do_daily_bot_update()
