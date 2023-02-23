@@ -99,6 +99,9 @@ def process_playlist_link(link, current_playlist_names):
     except ValueError:
       pass
 
+    if playlist_name in current_playlist_names:
+      return
+
 
     playlist = pd.read_html(str(playlist_table.contents[1]))[0]
     playlist.dropna(inplace=True)
