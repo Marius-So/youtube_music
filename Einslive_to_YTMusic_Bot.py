@@ -86,7 +86,12 @@ def process_playlist_link(link, current_playlist_names):
   if playlist_table:
     # here we check again for the name...
     try:
-      caption_date = dparser.parse(soup.find("caption"),fuzzy=True,dayfirst=True).strftime("%d.%m.%Y")
+      assert soup.find("caption").text
+      caption_date = re.search(r"\d{2}.\d{2}.\d{4}", soup.find("caption").text)
+      if bool(caption_date):
+        caption_date = caption_date.group()
+      else:
+        caption_date = ""
       if date != caption_date:
       # only here i know that there is this caption...
         date = caption_date
@@ -94,7 +99,6 @@ def process_playlist_link(link, current_playlist_names):
     except ValueError:
       pass
 
-    if playlist_name in current_playlist_names: return
 
     playlist = pd.read_html(str(playlist_table.contents[1]))[0]
     playlist.dropna(inplace=True)
@@ -132,7 +136,7 @@ def process_playlist_link(link, current_playlist_names):
 def do_daily_bot_update():
   # scrape 1Live
   # need to upate / improve the scraper
-  write = True
+  write = False
   if write:
     playlist_links = scrape_einslive()
     with open('playlist_links.txt', 'w') as f:
