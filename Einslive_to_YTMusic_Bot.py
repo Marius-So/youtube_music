@@ -61,6 +61,7 @@ def get_einslive_links(url, base_page, depth=2):
         processed.add(base_page + link.attrs['href'])
   return processed
 
+
 def process_playlist_link(link, current_playlist_names):
   data = urllib.request.urlopen(link).read()
   soup = BeautifulSoup(markup=data, features="lxml")
@@ -82,43 +83,43 @@ def process_playlist_link(link, current_playlist_names):
   # read playlist from html
   playlist_table = soup.find("div", {"class": "box modTable"})
   if playlist_table:
-      # here we check again for the name...
-      if date != soup.find("caption").text[-10:]:
-        # only here i know that there is this caption...
-        date = soup.find("caption").text[-10:]
-        playlist_name = name + ' - ' + date
+    # here we check again for the name...
+    if date != soup.find("caption").text[-10:]:
+      # only here i know that there is this caption...
+      date = soup.find("caption").text[-10:]
+      playlist_name = name + ' - ' + date
 
-      if playlist_name in current_playlist_names: return
+    if playlist_name in current_playlist_names: return
 
-      playlist = pd.read_html(str(playlist_table.contents[1]))[0]
-      playlist.dropna(inplace=True)
+    playlist = pd.read_html(str(playlist_table.contents[1]))[0]
+    playlist.dropna(inplace=True)
 
-      service = create_service()
-      playlistId = create_playlist(
-        service, playlist_name, header + '\n' +
-        'THIS is an automatically generated Playlist. GENERATED based on: \n' +
-        link)
-      print('Sucessfully Created Playlist: ', playlist_name)
+    service = create_service()
+    playlistId = create_playlist(
+      service, playlist_name, header + '\n' +
+      'THIS is an automatically generated Playlist. GENERATED based on: \n' +
+      link)
+    print('Sucessfully Created Playlist: ', playlist_name)
 
-      for idx in range(playlist.shape[0]):
-        print(idx, ' of ', playlist.shape[0])
-        song_name = playlist.iloc[idx][0] + ' ' + playlist.iloc[idx][1]
-        response = get_song_id(service, song_name, use_free=True)
+    for idx in range(playlist.shape[0]):
+      print(idx, ' of ', playlist.shape[0])
+      song_name = playlist.iloc[idx][0] + ' ' + playlist.iloc[idx][1]
+      response = get_song_id(service, song_name, use_free=True)
 
-        try:
-          if response:
-            sleep(5)
-            add_song_to_playlist(service, playlistId, response[0])
+      try:
+        if response:
+          sleep(5)
+          add_song_to_playlist(service, playlistId, response[0])
 
-        except HttpError as e:
-          print(service, playlistId, response[0])
-          print(e)
-          with open('playlist_to_delete.txt', 'a') as f:
-            f.write(playlistId + '\n')
-          return
+      except HttpError as e:
+        print(service, playlistId, response[0])
+        print(e)
+        with open('playlist_to_delete.txt', 'a') as f:
+          f.write(playlistId + '\n')
+        return
 
-      return ('https://music.youtube.com/playlist?list=' + playlistId,
-              playlist_name)
+    return ('https://music.youtube.com/playlist?list=' + playlistId,
+            playlist_name)
   else:
     return
 
@@ -126,7 +127,7 @@ def process_playlist_link(link, current_playlist_names):
 def do_daily_bot_update():
   # scrape 1Live
   # need to upate / improve the scraper
-  write = False
+  write = True
   if write:
     playlist_links = scrape_einslive()
     with open('playlist_links.txt', 'w') as f:
@@ -189,5 +190,5 @@ def do_daily_bot_update():
         pass
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
   do_daily_bot_update()

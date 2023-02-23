@@ -1,12 +1,19 @@
-from flask import Flask
+from flask import Flask, send_file, render_template
 from threading import Thread
+import os
 
 app = Flask('')
 
 
 @app.route('/')
-def home():
-  return 'im alive'
+def index():
+  return render_template('index.html')
+
+
+@app.route('/download')
+def download_file():
+  path = "1live_link_match.csv"
+  return send_file(path, as_attachment=True)
 
 
 def run():
