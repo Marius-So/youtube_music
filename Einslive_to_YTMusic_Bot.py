@@ -4,6 +4,7 @@ import pandas as pd
 from alive_progress import alive_bar
 from YTmusic_handler import *
 from time import sleep
+import dateutil.parser as dparser
 
 #from concurrent.futures import ThreadPoolExecutor
 
@@ -84,10 +85,14 @@ def process_playlist_link(link, current_playlist_names):
   playlist_table = soup.find("div", {"class": "box modTable"})
   if playlist_table:
     # here we check again for the name...
-    if date != soup.find("caption").text[-10:]:
+    try:
+      caption_date = dparser.parse(soup.find("caption"),fuzzy=True,dayfirst=True).strftime("%d.%m.%Y")
+      if date != caption_date:
       # only here i know that there is this caption...
-      date = soup.find("caption").text[-10:]
-      playlist_name = name + ' - ' + date
+        date = caption_date
+        playlist_name = name + ' - ' + date
+    except ValueError:
+      pass
 
     if playlist_name in current_playlist_names: return
 
@@ -170,8 +175,6 @@ def do_daily_bot_update():
   with alive_bar(len(playlist_links)) as bar:
     for idx, link in enumerate(playlist_links):
       bar()
-
-      if link in links_processed: continue
 
       playlist_info = process_playlist_link(link, current_playlist_names)
 
